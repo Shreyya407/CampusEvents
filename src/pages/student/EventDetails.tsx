@@ -106,6 +106,35 @@ export const EventDetails: React.FC = () => {
     };
   };
 
+  const handleJoinWaitlistClick = async (eventObj = event) => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    const currentEvent = eventObj || event;
+    if (!currentEvent) return;
+
+    if (currentEvent.fee > 0) {
+      setPaymentMode('waitlist');
+      setPaymentModalOpen(true);
+    } else {
+      // Free Waitlist
+      setSubmitting(true);
+      setError(null);
+      try {
+        const txRef = generateTransactionReference();
+        const res = await joinEventWaitlistRPC(currentEvent.id, 0, txRef);
+        if (!res.success) throw new Error(res.message);
+        setSuccessMessage(`Joined waitlist successfully! Your position is #${res.position}`);
+        await fetchEventDetails();
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
+
   const handleRegisterClick = async () => {
     if (!user) {
       navigate('/login');
@@ -121,10 +150,15 @@ export const EventDetails: React.FC = () => {
       const res = await registerForEventRPC(event.id);
 
       if (!res.success) {
-        if (res.is_full || (res.message && res.message.toLowerCase().includes('full'))) {
+        const isFullError = res.is_full || (res.message && res.message.toLowerCase().includes('full'));
+        if (isFullError) {
           setForcedIsFull(true);
           setConfirmedCount(event.capacity);
-          setError('Event capacity is full! Click "Join Smart Paid Waitlist" below to join the waitlist queue.');
+          setError('Event capacity is full! Opening waitlist...');
+          // Automatically trigger waitlist modal/join
+          setTimeout(() => {
+            handleJoinWaitlistClick(event);
+          }, 300);
         } else {
           throw new Error(res.message || 'Registration failed.');
         }
@@ -140,37 +174,19 @@ export const EventDetails: React.FC = () => {
         await fetchEventDetails();
       }
     } catch (err: any) {
-      setError(err.message);
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('full')) {
+        setForcedIsFull(true);
+        setConfirmedCount(event.capacity);
+        setError('Event capacity is full! Opening waitlist...');
+        setTimeout(() => {
+          handleJoinWaitlistClick(event);
+        }, 300);
+      } else {
+        setError(msg);
+      }
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleJoinWaitlistClick = async () => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    if (!event) return;
-
-    if (event.fee > 0) {
-      setPaymentMode('waitlist');
-      setPaymentModalOpen(true);
-    } else {
-      // Free Waitlist
-      setSubmitting(true);
-      setError(null);
-      try {
-        const txRef = generateTransactionReference();
-        const res = await joinEventWaitlistRPC(event.id, 0, txRef);
-        if (!res.success) throw new Error(res.message);
-        setSuccessMessage(`Joined waitlist successfully! Your position is #${res.position}`);
-        await fetchEventDetails();
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setSubmitting(false);
-      }
     }
   };
 
@@ -397,7 +413,7 @@ export const EventDetails: React.FC = () => {
                     className={`h-full rounded-full transition-all ${
                       isFull ? 'bg-error' : 'bg-secondary'
                     }`}
-                    style={{ width: `${capacityPercent}%` }}
+                    style={{ width: `${isFull ? 100 : capacityPercent}%` }}
                   />
                 </div>
 
@@ -479,9 +495,9 @@ export const EventDetails: React.FC = () => {
                     </button>
                   ) : (
                     <button
-                      onClick={handleJoinWaitlistClick}
+                      onClick={() => handleJoinWaitlistClick()}
                       disabled={submitting}
-                      className="w-full py-3 bg-amber-600 text-white rounded-lg text-label-md font-label-md font-semibold hover:bg-amber-700 transition-colors flex items-center justify-center gap-2 shadow-sm animate-pulse"
+                      className="w-full py-3 bg-amber-600 text-white rounded-lg text-label-md font-label-md font-semibold hover:bg-amber-700 transition-colors flex items-center justify-center gap-2 shadow-sm animate-bounce"
                     >
                       <span className="material-symbols-outlined text-[20px]">queue</span>
                       <span>{event.fee > 0 ? 'Join Smart Paid Waitlist' : 'Join Smart Waitlist'}</span>
