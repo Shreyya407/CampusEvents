@@ -32,14 +32,28 @@ export const App: React.FC = () => {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Public / Student Routes */}
-          <Route path="/" element={<Navigate to="/events" replace />} />
+          {/* Default Root Redirects to Student Login */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<StudentLogin />} />
           <Route path="/signup" element={<StudentSignup />} />
-          <Route path="/events" element={<BrowseEvents />} />
-          <Route path="/events/:id" element={<EventDetails />} />
 
-          {/* Protected Student Routes */}
+          {/* Protected Student Routes (Requires Login) */}
+          <Route
+            path="/events"
+            element={
+              <ProtectedRoute allowedRole="student">
+                <BrowseEvents />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/events/:id"
+            element={
+              <ProtectedRoute allowedRole="student">
+                <EventDetails />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/student/dashboard"
             element={
@@ -101,18 +115,18 @@ export const App: React.FC = () => {
             }
           />
           <Route
-            path="/admin/events/:id"
-            element={
-              <ProtectedRoute allowedRole="admin">
-                <AdminEventDetails />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/admin/events/:id/edit"
             element={
               <ProtectedRoute allowedRole="admin">
                 <EditEvent />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/events/:id"
+            element={
+              <ProtectedRoute allowedRole="admin">
+                <AdminEventDetails />
               </ProtectedRoute>
             }
           />
@@ -125,7 +139,7 @@ export const App: React.FC = () => {
             }
           />
           <Route
-            path="/admin/payments"
+            path="/admin/finance"
             element={
               <ProtectedRoute allowedRole="admin">
                 <FinanceList />
@@ -165,8 +179,8 @@ export const App: React.FC = () => {
             }
           />
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/events" replace />} />
+          {/* Fallback Catch-all Redirects to Login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
     </AuthProvider>

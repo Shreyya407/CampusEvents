@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS public.events (
     fee NUMERIC(10, 2) NOT NULL DEFAULT 0.00 CHECK (fee >= 0),
     rules TEXT,
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'cancelled', 'completed')),
-    created_by UUID REFERENCES public.profiles(id),
+    created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     check_in_start_at TIMESTAMPTZ,
     check_in_end_at TIMESTAMPTZ,
     check_in_token TEXT DEFAULT floor(1000 + random() * 9000)::text,
@@ -206,7 +206,7 @@ CREATE TRIGGER on_auth_user_created
 -- ATOMIC RPC FUNCTIONS FOR EVENT MANAGEMENT
 -- ====================================================================
 
--- 0. RPC: get_event_counts (Security Definer for accurate seat count & waitlist count)
+-- 0. RPC: get_event_counts
 CREATE OR REPLACE FUNCTION public.get_event_counts(p_event_id UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -392,7 +392,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- 3. RPC: cancel_registration (WITH AUTOMATIC FIFO WAITLIST PROMOTION)
+-- 3. RPC: cancel_registration
 CREATE OR REPLACE FUNCTION public.cancel_registration(p_registration_id UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -430,7 +430,6 @@ BEGIN
     WHERE id = p_registration_id;
 
     -- AUTOMATIC FIFO WAITLIST PROMOTION
-    -- Find lowest position waiting student (Position 1)
     SELECT * INTO v_next_waitlist FROM public.waitlist
     WHERE event_id = v_event.id AND status = 'waiting'
     ORDER BY position ASC
@@ -439,7 +438,6 @@ BEGIN
     IF v_next_waitlist IS NOT NULL THEN
         v_promoted_student_id := v_next_waitlist.student_id;
 
-        -- Create confirmed registration for promoted student
         INSERT INTO public.registrations (
             event_id,
             student_id,
@@ -454,13 +452,11 @@ BEGIN
         )
         RETURNING id INTO v_new_reg_id;
 
-        -- Update waitlist record to promoted
         UPDATE public.waitlist
         SET status = 'promoted',
             updated_at = NOW()
         WHERE id = v_next_waitlist.id;
 
-        -- Shift remaining waiting positions up by 1 (Position 2 -> Position 1, etc.)
         UPDATE public.waitlist
         SET position = position - 1,
             updated_at = NOW()
@@ -509,7 +505,6 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Event not found.');
     END IF;
 
-    -- Check if confirmed registrations are indeed full
     SELECT COUNT(*) INTO v_confirmed_count FROM public.registrations
     WHERE event_id = p_event_id AND status = 'confirmed';
 
@@ -517,7 +512,6 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Event still has open seats. Please register directly.');
     END IF;
 
-    -- Check if student already registered or waitlisted
     SELECT * INTO v_existing_reg FROM public.registrations
     WHERE event_id = p_event_id AND student_id = v_student_id AND status = 'confirmed';
 
@@ -532,7 +526,6 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'You are already on the waitlist for this event.');
     END IF;
 
-    -- Count active waiting students
     SELECT COUNT(*) INTO v_active_waitlist_count FROM public.waitlist
     WHERE event_id = p_event_id AND status = 'waiting';
 
@@ -542,7 +535,6 @@ BEGIN
 
     v_next_position := v_active_waitlist_count + 1;
 
-    -- Record Payment if fee > 0
     IF p_amount > 0 THEN
         INSERT INTO public.payments (
             student_id,
@@ -563,7 +555,6 @@ BEGIN
         RETURNING id INTO v_payment_id;
     END IF;
 
-    -- Insert Waitlist Record
     INSERT INTO public.waitlist (
         event_id,
         student_id,
@@ -615,12 +606,10 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Event not found.');
     END IF;
 
-    -- Token validation
     IF v_event.check_in_token IS NULL OR v_event.check_in_token != p_check_in_token THEN
         RETURN jsonb_build_object('success', false, 'message', 'Invalid 4-digit check-in PIN.');
     END IF;
 
-    -- Check-in window validation
     IF v_event.check_in_start_at IS NOT NULL AND NOW() < v_event.check_in_start_at THEN
         RETURN jsonb_build_object('success', false, 'message', 'Check-in period has not started yet.');
     END IF;
@@ -629,7 +618,6 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Check-in period has ended.');
     END IF;
 
-    -- Verify confirmed registration
     SELECT * INTO v_reg FROM public.registrations
     WHERE event_id = p_event_id AND student_id = v_student_id AND status = 'confirmed';
 
@@ -637,7 +625,6 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'You do not have a confirmed registration for this event.');
     END IF;
 
-    -- Duplicate check-in check
     SELECT * INTO v_existing_att FROM public.attendance
     WHERE event_id = p_event_id AND student_id = v_student_id;
 
@@ -649,7 +636,6 @@ BEGIN
         );
     END IF;
 
-    -- Create Attendance Record
     INSERT INTO public.attendance (
         event_id,
         student_id,
