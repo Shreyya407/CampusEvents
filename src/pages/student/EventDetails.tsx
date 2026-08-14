@@ -32,6 +32,7 @@ export const EventDetails: React.FC = () => {
   useEffect(() => {
     if (id) {
       fetchEventDetails();
+      subscribeRealtime();
     }
   }, [id, user]);
 
@@ -98,6 +99,20 @@ export const EventDetails: React.FC = () => {
     }
   };
 
+  const subscribeRealtime = () => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`event_details_realtime_${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations', filter: `event_id=eq.${id}` }, () => fetchEventDetails())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'waitlist', filter: `event_id=eq.${id}` }, () => fetchEventDetails())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `id=eq.${id}` }, () => fetchEventDetails())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
+
   const handleRegisterClick = async () => {
     if (!user) {
       navigate('/login');
@@ -110,7 +125,6 @@ export const EventDetails: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      // Execute register_for_event RPC
       const res = await registerForEventRPC(event.id);
 
       if (!res.success) {
@@ -189,7 +203,6 @@ export const EventDetails: React.FC = () => {
 
   if (!event) return null;
 
-  // Business state calculations
   const now = new Date();
   const regOpenAt = new Date(event.registration_open_at);
   const regCloseAt = new Date(event.registration_close_at);
@@ -351,7 +364,7 @@ export const EventDetails: React.FC = () => {
                 </span>
               </div>
 
-              {/* Capacity Progress Bar */}
+              {/* Live Capacity Progress Bar */}
               <div className="space-y-2 pt-2 border-t border-outline-variant/40">
                 <div className="flex justify-between text-label-md font-label-md">
                   <span className="text-on-surface-variant">Confirmed Seats</span>
@@ -374,22 +387,22 @@ export const EventDetails: React.FC = () => {
                 </p>
               </div>
 
-              {/* Smart Waitlist Stats (if full) */}
-              {isFull && (
-                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg text-body-sm">
-                  <div className="flex items-center justify-between font-semibold mb-1">
-                    <span>Smart Waitlist Queue</span>
-                    <span>{waitlistCount} / 4 Students</span>
-                  </div>
-                  <p className="text-label-sm">
-                    {isWaitlistFull
-                      ? 'Waitlist maximum capacity (4) reached.'
-                      : 'Join waitlist with fee deposit. Automatic promotion if a seat opens!'}
-                  </p>
+              {/* Public Waitlist Status Banner for Everyone */}
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg text-body-sm">
+                <div className="flex items-center justify-between font-semibold mb-1">
+                  <span>Smart Waitlist Queue</span>
+                  <span>{waitlistCount} / 4 Spots Filled</span>
                 </div>
-              )}
+                <p className="text-label-sm">
+                  {isFull
+                    ? isWaitlistFull
+                      ? 'Waitlist is currently at max capacity (4/4).'
+                      : 'Event is full! Join the paid waitlist for automatic seat promotion.'
+                    : 'If event becomes full, a 4-person FIFO waitlist opens automatically.'}
+                </p>
+              </div>
 
-              {/* Dynamic Registration Button */}
+              {/* Dynamic Action Button */}
               <div className="pt-2">
                 {myRegistration ? (
                   <div className="space-y-2">
@@ -404,7 +417,7 @@ export const EventDetails: React.FC = () => {
                       to="/my-registrations"
                       className="block text-center text-label-sm font-label-sm text-secondary hover:underline py-1"
                     >
-                      View Ticket & Check-in QR
+                      View Ticket Pass Info
                     </Link>
                   </div>
                 ) : myWaitlist ? (
@@ -420,7 +433,7 @@ export const EventDetails: React.FC = () => {
                       to="/my-registrations"
                       className="block text-center text-label-sm font-label-sm text-secondary hover:underline py-1"
                     >
-                      View Waitlist Status
+                      View Waitlist Queue Status
                     </Link>
                   </div>
                 ) : isNotOpenYet ? (

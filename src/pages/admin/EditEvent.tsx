@@ -18,12 +18,30 @@ export const EditEvent: React.FC = () => {
   const [eventDate, setEventDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+
+  const [regOpenAt, setRegOpenAt] = useState('');
+  const [regCloseAt, setRegCloseAt] = useState('');
+  const [cancellationDeadline, setCancellationDeadline] = useState('');
+
+  const [checkInStartAt, setCheckInStartAt] = useState('');
+  const [checkInEndAt, setCheckInEndAt] = useState('');
+
   const [rules, setRules] = useState('');
   const [status, setStatus] = useState<Event['status']>('published');
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const formatIsoForInput = (isoStr: string | null) => {
+    if (!isoStr) return '';
+    try {
+      const date = new Date(isoStr);
+      return date.toISOString().slice(0, 16);
+    } catch {
+      return '';
+    }
+  };
 
   useEffect(() => {
     if (id) fetchEvent();
@@ -47,6 +65,14 @@ export const EditEvent: React.FC = () => {
       setEventDate(ev.event_date);
       setStartTime(ev.start_time);
       setEndTime(ev.end_time);
+
+      setRegOpenAt(formatIsoForInput(ev.registration_open_at));
+      setRegCloseAt(formatIsoForInput(ev.registration_close_at));
+      setCancellationDeadline(formatIsoForInput(ev.cancellation_deadline));
+
+      setCheckInStartAt(formatIsoForInput(ev.check_in_start_at));
+      setCheckInEndAt(formatIsoForInput(ev.check_in_end_at));
+
       setRules(ev.rules || '');
       setStatus(ev.status);
     } catch (err: any) {
@@ -75,6 +101,11 @@ export const EditEvent: React.FC = () => {
           event_date: eventDate,
           start_time: startTime,
           end_time: endTime,
+          registration_open_at: regOpenAt ? new Date(regOpenAt).toISOString() : event?.registration_open_at,
+          registration_close_at: regCloseAt ? new Date(regCloseAt).toISOString() : event?.registration_close_at,
+          cancellation_deadline: cancellationDeadline ? new Date(cancellationDeadline).toISOString() : event?.cancellation_deadline,
+          check_in_start_at: checkInStartAt ? new Date(checkInStartAt).toISOString() : null,
+          check_in_end_at: checkInEndAt ? new Date(checkInEndAt).toISOString() : null,
           rules,
           status,
           updated_at: new Date().toISOString(),
@@ -110,9 +141,9 @@ export const EditEvent: React.FC = () => {
         </Link>
 
         <div className="bg-surface rounded-2xl border border-outline-variant p-stack-md md:p-stack-lg shadow-sm max-w-4xl">
-          <h1 className="text-headline-lg font-headline-lg text-primary mb-1">Edit Event Details</h1>
+          <h1 className="text-headline-lg font-headline-lg text-primary mb-1">Edit Event & Check-in Timelines</h1>
           <p className="text-body-md text-on-surface-variant mb-stack-lg">
-            Update event information, seat capacity, fees, or status.
+            Update event information, seat capacity, fees, status, registration deadline, and QR check-in window.
           </p>
 
           {error && (
@@ -265,6 +296,81 @@ export const EditEvent: React.FC = () => {
               </div>
             </div>
 
+            {/* Editable Registration Timelines */}
+            <div className="p-stack-md bg-surface-container-low rounded-xl border border-outline-variant space-y-stack-md">
+              <h3 className="text-title-lg font-title-lg text-primary">Registration & Cancellation Timelines</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+                <div>
+                  <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
+                    Registration Opens
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={regOpenAt}
+                    onChange={(e) => setRegOpenAt(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
+                    Registration Closes
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={regCloseAt}
+                    onChange={(e) => setRegCloseAt(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
+                    Cancellation Deadline
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={cancellationDeadline}
+                    onChange={(e) => setCancellationDeadline(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Editable QR Check-in Window */}
+            <div className="p-stack-md bg-surface-container-low rounded-xl border border-outline-variant space-y-stack-md">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-secondary">edit_calendar</span>
+                <h3 className="text-title-lg font-title-lg text-primary font-semibold">Editable Check-in QR Window</h3>
+              </div>
+              <p className="text-body-sm text-on-surface-variant">
+                Configure when students are allowed to scan the venue QR code to mark attendance.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+                <div>
+                  <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
+                    Check-in Window Opens
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={checkInStartAt}
+                    onChange={(e) => setCheckInStartAt(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
+                    Check-in Window Closes
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={checkInEndAt}
+                    onChange={(e) => setCheckInEndAt(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div>
               <label className="block text-label-md font-label-md text-on-surface-variant mb-1">
                 Rules & Guidelines
@@ -289,7 +395,7 @@ export const EditEvent: React.FC = () => {
                 disabled={submitting}
                 className="px-8 py-2.5 bg-secondary text-on-secondary rounded-lg font-label-md font-semibold hover:bg-on-secondary-fixed-variant transition-colors shadow-sm disabled:opacity-50"
               >
-                {submitting ? 'Saving Changes...' : 'Save Changes'}
+                {submitting ? 'Saving Changes...' : 'Save & Update Event'}
               </button>
             </div>
           </form>

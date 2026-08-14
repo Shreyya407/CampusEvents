@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Registration, WaitlistEntry } from '../../types/database.types';
 import { StudentNavbar } from '../../components/layout/StudentNavbar';
 import { formatCurrency, formatDate, formatTime } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { cancelRegistrationRPC } from '../../lib/rpc';
-import { QRCodeSVG } from 'qrcode.react';
 
 export const MyRegistrations: React.FC = () => {
   const { user } = useAuth();
@@ -19,12 +17,10 @@ export const MyRegistrations: React.FC = () => {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Selected QR modal ticket
-  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
-
   useEffect(() => {
     if (user) {
       fetchMyData();
+      subscribeToRealtime();
     }
   }, [user]);
 
@@ -64,6 +60,27 @@ export const MyRegistrations: React.FC = () => {
     }
   };
 
+  const subscribeToRealtime = () => {
+    if (!user) return;
+    const channel = supabase
+      .channel('my_registrations_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'registrations', filter: `student_id=eq.${user.id}` },
+        () => fetchMyData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'waitlist', filter: `student_id=eq.${user.id}` },
+        () => fetchMyData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
+
   const handleCancelRegistration = async (regId: string) => {
     if (!window.confirm('Are you sure you want to cancel this registration?')) return;
 
@@ -77,7 +94,7 @@ export const MyRegistrations: React.FC = () => {
         throw new Error(res.message || 'Cancellation failed.');
       }
 
-      setActionMessage('Registration cancelled successfully. Seat released.');
+      setActionMessage('Registration cancelled successfully. Seat released for waitlist.');
       await fetchMyData();
     } catch (err: any) {
       setActionError(err.message);
@@ -97,7 +114,7 @@ export const MyRegistrations: React.FC = () => {
               My Event Registrations
             </h1>
             <p className="text-body-md text-on-surface-variant mt-1">
-              Manage your confirmed event tickets, QR check-ins, and waitlist positions.
+              View your confirmed event passes, registration details, and live waitlist status.
             </p>
           </div>
 
@@ -106,7 +123,7 @@ export const MyRegistrations: React.FC = () => {
             className="bg-secondary text-on-secondary px-4 py-2.5 rounded-lg text-label-md font-label-md font-semibold flex items-center gap-2 shadow-sm hover:bg-on-secondary-fixed-variant transition-colors"
           >
             <span className="material-symbols-outlined text-[20px]">qr_code_scanner</span>
-            <span>Scan QR for Attendance</span>
+            <span>Scan Event QR for Check-in</span>
           </Link>
         </div>
 
@@ -231,25 +248,24 @@ export const MyRegistrations: React.FC = () => {
                             Fee: {formatCurrency(event.fee)} ({reg.payment_status})
                           </span>
                         </div>
+
+                        <div className="flex items-center gap-2 text-label-sm text-on-surface-variant font-mono">
+                          <span className="material-symbols-outlined text-[18px] text-secondary">badge</span>
+                          <span>Ticket Pass ID: {reg.id.slice(0, 8).toUpperCase()}</span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="pt-stack-sm border-t border-outline-variant/30 flex flex-wrap items-center justify-between gap-2">
-                      {!isCancelled && (
-                        <button
-                          onClick={() => setSelectedTicket(reg)}
-                          className="px-4 py-2 bg-secondary/10 text-secondary hover:bg-secondary/20 rounded-lg text-label-sm font-label-sm font-semibold flex items-center gap-1.5"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">qr_code</span>
-                          <span>Show Check-in QR</span>
-                        </button>
-                      )}
+                    <div className="pt-stack-sm border-t border-outline-variant/30 flex items-center justify-between gap-2">
+                      <span className="text-label-sm text-on-surface-variant">
+                        Scan event QR at venue to check-in
+                      </span>
 
                       {canCancel && (
                         <button
                           onClick={() => handleCancelRegistration(reg.id)}
                           disabled={cancellingId === reg.id}
-                          className="px-3 py-1.5 text-error hover:bg-error-container/30 rounded text-label-sm font-label-sm transition-colors"
+                          className="px-3 py-1.5 text-error hover:bg-error-container/30 rounded text-label-sm font-label-sm transition-colors font-semibold"
                         >
                           {cancellingId === reg.id ? 'Cancelling...' : 'Cancel Registration'}
                         </button>
@@ -301,7 +317,7 @@ export const MyRegistrations: React.FC = () => {
                     <div className="flex items-center gap-3">
                       {wait.status === 'waiting' && (
                         <div className="bg-amber-50 text-amber-800 p-3 rounded-lg border border-amber-200 text-label-sm max-w-xs">
-                          If a seat opens before deadline, you will be auto-confirmed into position #1!
+                          If a seat opens before deadline, position #1 will be auto-confirmed!
                         </div>
                       )}
                       {wait.status === 'confirmed' && (
@@ -317,47 +333,6 @@ export const MyRegistrations: React.FC = () => {
           )
         )}
       </main>
-
-      {/* QR Code Modal Display */}
-      {selectedTicket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/60 backdrop-blur-sm">
-          <div className="bg-surface rounded-2xl border border-outline-variant p-6 max-w-sm w-full flex flex-col items-center text-center shadow-2xl relative">
-            <button
-              onClick={() => setSelectedTicket(null)}
-              className="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-
-            <div className="w-12 h-12 rounded-full bg-secondary/10 text-secondary flex items-center justify-center mb-3">
-              <span className="material-symbols-outlined text-[28px]">qr_code_2</span>
-            </div>
-
-            <h3 className="text-title-lg font-title-lg text-primary mb-1">Event Entry Pass</h3>
-            <p className="text-body-sm text-on-surface-variant mb-4">
-              {selectedTicket.event?.title}
-            </p>
-
-            {/* QR Code Graphic */}
-            <div className="p-4 bg-white rounded-xl border border-outline-variant shadow-inner mb-4">
-              <QRCodeSVG
-                value={JSON.stringify({
-                  eventId: selectedTicket.event_id,
-                  studentId: selectedTicket.student_id,
-                  checkInToken: selectedTicket.event?.check_in_token,
-                })}
-                size={180}
-                level="H"
-              />
-            </div>
-
-            <p className="text-label-sm text-on-surface-variant">
-              Show this QR code at the event check-in kiosk to mark attendance.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
-
