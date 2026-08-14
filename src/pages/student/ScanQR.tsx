@@ -4,7 +4,7 @@ import { Event } from '../../types/database.types';
 import { StudentNavbar } from '../../components/layout/StudentNavbar';
 import { checkInStudentRPC } from '../../lib/rpc';
 import { useAuth } from '../../context/AuthContext';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
 
 export const ScanQR: React.FC = () => {
   const { user } = useAuth();
@@ -42,13 +42,18 @@ export const ScanQR: React.FC = () => {
   };
 
   useEffect(() => {
-    // Initialize html5-qrcode camera scanner
+    // Initialize html5-qrcode CAMERA-ONLY scanner (Disables Image File Upload / Dropzone)
     let scanner: Html5QrcodeScanner | null = null;
     const element = document.getElementById('qr-reader');
     if (element) {
       scanner = new Html5QrcodeScanner(
         'qr-reader',
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA], // STRICT CAMERA ONLY - NO IMAGE FILE DROP
+          rememberLastUsedCamera: true,
+        },
         false
       );
 
@@ -143,9 +148,9 @@ export const ScanQR: React.FC = () => {
           <div className="w-16 h-16 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center mx-auto mb-stack-md border border-outline-variant">
             <span className="material-symbols-outlined text-[36px]">qr_code_scanner</span>
           </div>
-          <h1 className="text-headline-lg font-headline-lg text-primary">Event QR Attendance Check-in</h1>
+          <h1 className="text-headline-lg font-headline-lg text-primary">Event Attendance Check-in</h1>
           <p className="text-body-md text-on-surface-variant mt-1">
-            Scan the official event QR code displayed by campus management or enter the check-in token.
+            Scan the venue QR code live with your device camera or enter the check-in token.
           </p>
         </div>
 
@@ -192,10 +197,18 @@ export const ScanQR: React.FC = () => {
           </select>
         </div>
 
-        {/* Scanner Card */}
+        {/* Live Camera Scanner Container (No Image Drop / File Selection Allowed) */}
         <div className="w-full max-w-lg bg-surface rounded-xl border border-outline-variant p-stack-md shadow-sm mb-stack-md">
-          <h3 className="text-title-lg font-title-lg text-primary mb-3">2. Scan Event QR Code</h3>
-          <div id="qr-reader" className="overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low" />
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-title-lg font-title-lg text-primary">2. Scan Venue QR Code (Live Camera)</h3>
+            <span className="text-label-sm bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded font-semibold">
+              Live Camera Only
+            </span>
+          </div>
+          <div
+            id="qr-reader"
+            className="overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low [&_#html5-qrcode-anchor-scan-type-change]:hidden [&_input[type=file]]:hidden"
+          />
         </div>
 
         {/* Manual Token Entry Fallback */}
