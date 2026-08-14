@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Register - CampusEvents</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed-variant": "#004395",
+                    "inverse-surface": "#213145",
+                    "surface-container-high": "#dce9ff",
+                    "tertiary": "#111516",
+                    "surface-container-highest": "#d3e4fe",
+                    "inverse-primary": "#bcc7de",
+                    "on-tertiary-fixed-variant": "#444749",
+                    "secondary": "#0058be",
+                    "on-tertiary-container": "#8d9092",
+                    "on-background": "#0b1c30",
+                    "surface-dim": "#cbdbf5",
+                    "background": "#f8f9ff",
+                    "on-primary-fixed-variant": "#3c475a",
+                    "primary-fixed-dim": "#bcc7de",
+                    "surface-container-low": "#eff4ff",
+                    "tertiary-fixed-dim": "#c4c7c9",
+                    "on-surface": "#0b1c30",
+                    "outline": "#75777d",
+                    "surface-tint": "#545f73",
+                    "surface-bright": "#f8f9ff",
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "on-primary-fixed": "#111c2d",
+                    "on-secondary-fixed": "#001a42",
+                    "error": "#ba1a1a",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-secondary-container": "#fefcff",
+                    "surface": "#f8f9ff",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed": "#e0e3e5",
+                    "on-tertiary-fixed": "#191c1e",
+                    "primary-fixed": "#d8e3fb",
+                    "primary-container": "#1e293b",
+                    "outline-variant": "#c5c6cd",
+                    "surface-container": "#e5eeff",
+                    "tertiary-container": "#26292b",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "on-primary-container": "#8590a6",
+                    "secondary-container": "#2170e4",
+                    "on-surface-variant": "#45474c",
+                    "on-error": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "secondary-fixed-dim": "#adc6ff",
+                    "surface-variant": "#d3e4fe",
+                    "secondary-fixed": "#d8e2ff",
+                    "primary": "#091426"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "base": "4px",
+                    "stack-sm": "8px",
+                    "stack-lg": "32px",
+                    "gutter": "24px",
+                    "container-max": "1280px",
+                    "margin-mobile": "16px",
+                    "stack-md": "16px",
+                    "margin-desktop": "32px"
+            },
+            "fontFamily": {
+                    "display-lg": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "label-md": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "title-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+            }
+          },
+        }
+      }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+        }
+
+        .input-field {
+            @apply w-full rounded bg-surface border border-outline px-4 py-3 text-body-md font-body-md text-on-surface focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors;
+        }
+
+        .input-label {
+            @apply block text-label-md font-label-md text-on-surface-variant mb-stack-sm;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-gutter relative overflow-hidden">
+<!-- Atmospheric Background Decoration -->
+<div class="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+<div class="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-primary-fixed blur-[120px] opacity-40"></div>
+<div class="absolute top-[40%] -right-[20%] w-[60%] h-[60%] rounded-full bg-surface-container-high blur-[140px] opacity-60"></div>
+</div>
+<!-- Registration Container -->
+<main class="w-full max-w-[1000px] mx-auto z-10 flex shadow-[0px_10px_30px_-5px_rgba(0,0,0,0.1)] rounded-2xl overflow-hidden bg-surface-container-lowest border border-outline-variant/30 relative">
+<!-- Left Panel: Branding & Imagery -->
+<div class="hidden lg:flex w-5/12 bg-primary relative flex-col justify-between p-stack-lg overflow-hidden">
+<!-- Placeholder for branded imagery -->
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover opacity-60 mix-blend-overlay" data-alt="A cinematic, high-quality photograph of a vibrant college campus event at twilight. Students are gathered around modern, glowing registration kiosks under strung fairy lights. The mood is energetic, academic, and forward-looking. The lighting is dramatic, emphasizing the sleek modern architecture of the student union building in the background. The overall aesthetic is professional, clean, and aspirational, leaning heavily into a deep navy and soft blue color palette to match the UI theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxzXR9JC5N5TJZcsG37tezrsGVodYpuOMbruCGAdU3FqSQCtdY4crBWOQoaRm9jUsexG70LUaa5jLjqnbcuVBSRLAlfvgL1GHVla7mDunPSQIW3YCFgd8iNvz--bV5cvVg8NhcX93sTfZw9hm0it_nlCmSn4KP5qFMiOK1DfmQtewMecx2mHzF5i3_NQ3XGRskLusULmhX-wIgzFY9bJTrjB7Sjn5L2IjUh57L2fYsZPetJDSvcG2ZvQ"/>
+<div class="absolute inset-0 bg-gradient-to-b from-primary/80 to-primary"></div>
+</div>
+<div class="relative z-10">
+<div class="flex items-center gap-2 mb-stack-lg text-on-primary">
+<span class="material-symbols-outlined text-[32px]">event_available</span>
+<span class="text-title-lg font-title-lg tracking-tight">CampusEvents</span>
+</div>
+<h1 class="text-display-lg font-display-lg text-on-primary mt-12">
+                     Join the<br/>Experience.
+                 </h1>
+<p class="text-body-lg font-body-lg text-primary-fixed mt-stack-md max-w-sm">
+                     Create your student account to register for workshops, seminars, and exclusive campus events.
+                 </p>
+</div>
+<div class="relative z-10 mt-auto pt-12">
+<div class="flex -space-x-3">
+<div class="w-10 h-10 rounded-full border-2 border-primary bg-secondary-container flex items-center justify-center text-on-secondary-container text-xs font-bold">JD</div>
+<div class="w-10 h-10 rounded-full border-2 border-primary bg-tertiary-container flex items-center justify-center text-on-tertiary-container text-xs font-bold">AK</div>
+<div class="w-10 h-10 rounded-full border-2 border-primary bg-primary-container flex items-center justify-center text-on-primary-container text-xs font-bold">SM</div>
+<div class="w-10 h-10 rounded-full border-2 border-primary bg-surface-variant flex items-center justify-center text-on-surface-variant text-xs font-medium">+2k</div>
+</div>
+<p class="text-label-sm font-label-sm text-primary-fixed mt-3">Join thousands of students already registered.</p>
+</div>
+</div>
+<!-- Right Panel: Form -->
+<div class="w-full lg:w-7/12 p-margin-mobile md:p-margin-desktop bg-surface-container-lowest">
+<div class="mb-stack-lg">
+<h2 class="text-headline-lg font-headline-lg text-on-surface">Student Registration</h2>
+<p class="text-body-md font-body-md text-on-surface-variant mt-1">Please fill in your details to create an account.</p>
+</div>
+<form class="space-y-stack-md" onsubmit="event.preventDefault();">
+<!-- Personal Info Row -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<div>
+<label class="input-label" for="fullName">Full Name</label>
+<input class="input-field" id="fullName" placeholder="e.g. Jane Doe" type="text"/>
+</div>
+<div>
+<label class="input-label" for="registerNumber">Register Number</label>
+<input class="input-field" id="registerNumber" placeholder="e.g. 2023CS105" type="text"/>
+</div>
+</div>
+<!-- Email -->
+<div>
+<label class="input-label" for="email">College Email</label>
+<input class="input-field" id="email" placeholder="e.g. jane.doe@college.edu" type="email"/>
+</div>
+<!-- Academic Info Row -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<div>
+<label class="input-label" for="department">Department</label>
+<div class="relative">
+<select class="input-field appearance-none pr-10" id="department">
+<option disabled="" selected="" value="">Select Department</option>
+<option value="cs">Computer Science</option>
+<option value="eng">Engineering</option>
+<option value="arts">Arts &amp; Humanities</option>
+<option value="bus">Business</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-3 text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+<div>
+<label class="input-label" for="year">Year of Study</label>
+<div class="relative">
+<select class="input-field appearance-none pr-10" id="year">
+<option disabled="" selected="" value="">Select Year</option>
+<option value="1">First Year</option>
+<option value="2">Second Year</option>
+<option value="3">Third Year</option>
+<option value="4">Fourth Year</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-3 text-on-surface-variant pointer-events-none">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Password Section -->
+<div class="space-y-stack-md pt-stack-sm border-t border-outline-variant/30">
+<div>
+<label class="input-label" for="password">Password</label>
+<div class="relative">
+<input class="input-field pr-10" id="password" type="password"/>
+<button class="absolute right-3 top-3 text-on-surface-variant hover:text-on-surface" type="button">
+<span class="material-symbols-outlined text-[20px]">visibility_off</span>
+</button>
+</div>
+<!-- Password Strength Indicator -->
+<div class="mt-2 flex gap-1 h-1 w-full">
+<div class="flex-1 bg-error rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+<div class="flex-1 bg-surface-variant rounded-full"></div>
+</div>
+<p class="text-label-sm font-label-sm text-on-surface-variant mt-1">Weak password</p>
+</div>
+<div>
+<label class="input-label" for="confirmPassword">Confirm Password</label>
+<input class="input-field" id="confirmPassword" type="password"/>
+</div>
+</div>
+<!-- Terms & Actions -->
+<div class="pt-stack-md">
+<label class="flex items-start gap-3 cursor-pointer group">
+<div class="relative flex items-center justify-center mt-0.5">
+<input class="peer appearance-none w-5 h-5 border border-outline rounded bg-surface checked:bg-secondary checked:border-secondary transition-colors cursor-pointer" type="checkbox"/>
+<span class="material-symbols-outlined absolute text-on-secondary text-[16px] opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity">check</span>
+</div>
+<span class="text-body-sm font-body-sm text-on-surface-variant group-hover:text-on-surface transition-colors">
+                            I agree to the <a class="text-secondary hover:underline font-medium" href="#">Terms &amp; Conditions</a> and <a class="text-secondary hover:underline font-medium" href="#">Privacy Policy</a>.
+                        </span>
+</label>
+</div>
+<div class="pt-stack-sm flex flex-col sm:flex-row items-center gap-4 justify-between">
+<p class="text-body-sm font-body-sm text-on-surface-variant">
+                        Already have an account? <a class="text-secondary font-medium hover:underline" href="#">Log in</a>
+</p>
+<button class="w-full sm:w-auto px-8 py-3 bg-secondary text-on-secondary rounded text-label-md font-label-md hover:bg-secondary/90 hover:shadow-[0_4px_12px_rgba(0,88,190,0.2)] transition-all active:scale-[0.98]" type="submit">
+                        Register Account
+                    </button>
+</div>
+</form>
+</div>
+</main>
+</body></html>
