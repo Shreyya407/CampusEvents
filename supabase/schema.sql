@@ -60,14 +60,12 @@ CREATE TABLE IF NOT EXISTS public.registrations (
 -- 4. PAYMENTS TABLE
 CREATE TABLE IF NOT EXISTS public.payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    registration_id UUID REFERENCES public.registrations(id) ON DELETE SET NULL,
     student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
     amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
-    payment_status TEXT NOT NULL DEFAULT 'successful' CHECK (payment_status IN ('not_required', 'pending', 'successful', 'failed', 'refunded')),
-    transaction_reference TEXT NOT NULL,
-    paid_at TIMESTAMPTZ DEFAULT NOW(),
-    refunded_at TIMESTAMPTZ,
+    payment_status TEXT NOT NULL DEFAULT 'successful' CHECK (payment_status IN ('pending', 'successful', 'failed', 'refunded')),
+    transaction_reference TEXT UNIQUE NOT NULL,
+    paid_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -77,14 +75,13 @@ CREATE TABLE IF NOT EXISTS public.waitlist (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
     student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    position INTEGER NOT NULL CHECK (position >= 1 AND position <= 4),
+    position INTEGER NOT NULL CHECK (position > 0 AND position <= 4),
     payment_id UUID REFERENCES public.payments(id) ON DELETE SET NULL,
-    status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'confirmed', 'not_confirmed', 'refunded', 'cancelled')),
+    status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'promoted', 'cancelled', 'refunded')),
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    confirmed_at TIMESTAMPTZ,
-    refunded_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (event_id, position)
 );
 
 -- 6. ATTENDANCE TABLE
@@ -92,53 +89,13 @@ CREATE TABLE IF NOT EXISTS public.attendance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
     student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    registration_id UUID REFERENCES public.registrations(id) ON DELETE SET NULL,
+    registration_id UUID NOT NULL REFERENCES public.registrations(id) ON DELETE CASCADE,
     checked_in_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    status TEXT NOT NULL DEFAULT 'present' CHECK (status = 'present'),
+    status TEXT NOT NULL DEFAULT 'present' CHECK (status IN ('present', 'late', 'absent')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT unique_student_event_attendance UNIQUE (event_id, student_id)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (event_id, student_id)
 );
-
--- ====================================================================
--- SUPABASE AUTH USER TRIGGER TO CREATING PROFILES
--- ====================================================================
-
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO public.profiles (
-        id,
-        full_name,
-        register_number,
-        email,
-        department,
-        year,
-        role
-    )
-    VALUES (
-        NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', 'Student User'),
-        COALESCE(NEW.raw_user_meta_data->>'register_number', 'REG' || substring(NEW.id::text from 1 for 6)),
-        NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'department', 'General'),
-        COALESCE(NEW.raw_user_meta_data->>'year', '1'),
-        COALESCE(NEW.raw_user_meta_data->>'role', 'student')
-    )
-    ON CONFLICT (id) DO UPDATE SET
-        full_name = EXCLUDED.full_name,
-        register_number = EXCLUDED.register_number,
-        department = EXCLUDED.department,
-        year = EXCLUDED.year;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Drop trigger if exists and recreate
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ====================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -151,7 +108,7 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.waitlist ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 
--- Helper function to check if current user is admin
+-- Helper function: is_admin
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -162,73 +119,129 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- PROFILES POLICIES
-CREATE POLICY "Profiles viewable by self or admin" ON public.profiles
-    FOR SELECT USING (auth.uid() = id OR public.is_admin());
+-- Profiles Policies
+CREATE POLICY "Profiles viewable by authenticated users"
+    ON public.profiles FOR SELECT
+    USING (auth.role() = 'authenticated');
 
-CREATE POLICY "Profiles updatable by self or admin" ON public.profiles
-    FOR UPDATE USING (auth.uid() = id OR public.is_admin());
+CREATE POLICY "Users can update own profile"
+    ON public.profiles FOR UPDATE
+    USING (id = auth.uid());
 
-CREATE POLICY "Profiles insertable by user or trigger" ON public.profiles
-    FOR INSERT WITH CHECK (auth.uid() = id OR public.is_admin());
+CREATE POLICY "Admins can update any profile"
+    ON public.profiles FOR ALL
+    USING (public.is_admin());
 
--- EVENTS POLICIES
-CREATE POLICY "Events viewable by everyone if published, or admin all" ON public.events
-    FOR SELECT USING (status = 'published' OR public.is_admin());
+-- Events Policies
+CREATE POLICY "Published events viewable by everyone"
+    ON public.events FOR SELECT
+    USING (status = 'published' OR public.is_admin());
 
-CREATE POLICY "Events full access for admin" ON public.events
-    FOR ALL USING (public.is_admin());
+CREATE POLICY "Admins can insert/update/delete events"
+    ON public.events FOR ALL
+    USING (public.is_admin());
 
--- REGISTRATIONS POLICIES
-CREATE POLICY "Registrations viewable by owner or admin" ON public.registrations
-    FOR SELECT USING (student_id = auth.uid() OR public.is_admin());
+-- Registrations Policies
+CREATE POLICY "Registrations viewable by owner or admin"
+    ON public.registrations FOR SELECT
+    USING (student_id = auth.uid() OR public.is_admin());
 
-CREATE POLICY "Registrations full access for admin" ON public.registrations
-    FOR ALL USING (public.is_admin());
+CREATE POLICY "Students can insert own registration"
+    ON public.registrations FOR INSERT
+    WITH CHECK (student_id = auth.uid());
 
--- PAYMENTS POLICIES
-CREATE POLICY "Payments viewable by owner or admin" ON public.payments
-    FOR SELECT USING (student_id = auth.uid() OR public.is_admin());
+CREATE POLICY "Students can update own registration"
+    ON public.registrations FOR UPDATE
+    USING (student_id = auth.uid() OR public.is_admin());
 
-CREATE POLICY "Payments full access for admin" ON public.payments
-    FOR ALL USING (public.is_admin());
+-- Payments Policies
+CREATE POLICY "Payments viewable by owner or admin"
+    ON public.payments FOR SELECT
+    USING (student_id = auth.uid() OR public.is_admin());
 
--- WAITLIST POLICIES
-CREATE POLICY "Waitlist viewable by owner or admin" ON public.waitlist
-    FOR SELECT USING (student_id = auth.uid() OR public.is_admin());
+-- Waitlist Policies
+CREATE POLICY "Waitlist viewable by owner or admin"
+    ON public.waitlist FOR SELECT
+    USING (student_id = auth.uid() OR public.is_admin());
 
-CREATE POLICY "Waitlist full access for admin" ON public.waitlist
-    FOR ALL USING (public.is_admin());
-
--- ATTENDANCE POLICIES
-CREATE POLICY "Attendance viewable by owner or admin" ON public.attendance
-    FOR SELECT USING (student_id = auth.uid() OR public.is_admin());
-
-CREATE POLICY "Attendance full access for admin" ON public.attendance
-    FOR ALL USING (public.is_admin());
-
+-- Attendance Policies
+CREATE POLICY "Attendance viewable by owner or admin"
+    ON public.attendance FOR SELECT
+    USING (student_id = auth.uid() OR public.is_admin());
 
 -- ====================================================================
--- BUSINESS LOGIC RPC FUNCTIONS (SECURITY DEFINER)
+-- AUTH TRIGGER FOR PROFILES
 -- ====================================================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, full_name, register_number, email, department, year, role)
+    VALUES (
+        NEW.id,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', 'Student User'),
+        COALESCE(NEW.raw_user_meta_data->>'register_number', 'PENDING'),
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'department', 'Computer Science'),
+        COALESCE(NEW.raw_user_meta_data->>'year', '1st Year'),
+        'student'
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        register_number = EXCLUDED.register_number,
+        email = EXCLUDED.email,
+        department = EXCLUDED.department,
+        year = EXCLUDED.year;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ====================================================================
+-- ATOMIC RPC FUNCTIONS FOR EVENT MANAGEMENT
+-- ====================================================================
+
+-- 0. RPC: get_event_counts (Security Definer for accurate seat count & waitlist count)
+CREATE OR REPLACE FUNCTION public.get_event_counts(p_event_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    v_confirmed INTEGER;
+    v_waitlisted INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO v_confirmed FROM public.registrations
+    WHERE event_id = p_event_id AND status = 'confirmed';
+
+    SELECT COUNT(*) INTO v_waitlisted FROM public.waitlist
+    WHERE event_id = p_event_id AND status = 'waiting';
+
+    RETURN jsonb_build_object(
+        'confirmed_count', COALESCE(v_confirmed, 0),
+        'waitlist_count', COALESCE(v_waitlisted, 0)
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 1. RPC: register_for_event
 CREATE OR REPLACE FUNCTION public.register_for_event(p_event_id UUID)
 RETURNS JSONB AS $$
 DECLARE
     v_student_id UUID := auth.uid();
-    v_event RECORD;
+    v_event public.events%ROWTYPE;
     v_confirmed_count INTEGER;
-    v_existing_reg RECORD;
+    v_existing_reg public.registrations%ROWTYPE;
+    v_existing_waitlist public.waitlist%ROWTYPE;
     v_reg_id UUID;
-    v_payment_status TEXT;
 BEGIN
-    -- Auth check
     IF v_student_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'User not authenticated.');
     END IF;
 
-    -- Fetch event with row lock to prevent race conditions
+    -- Lock event row for concurrency safety
     SELECT * INTO v_event FROM public.events WHERE id = p_event_id FOR UPDATE;
 
     IF v_event IS NULL THEN
@@ -244,10 +257,10 @@ BEGIN
     END IF;
 
     IF NOW() > v_event.registration_close_at THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Registration period has closed.');
+        RETURN jsonb_build_object('success', false, 'message', 'Registration is closed for this event.');
     END IF;
 
-    -- Check if student already has active registration
+    -- Check if student already registered
     SELECT * INTO v_existing_reg FROM public.registrations
     WHERE event_id = p_event_id AND student_id = v_student_id AND status = 'confirmed';
 
@@ -255,45 +268,70 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'You are already registered for this event.');
     END IF;
 
-    -- Count active confirmed registrations
+    -- Check if student is on waitlist
+    SELECT * INTO v_existing_waitlist FROM public.waitlist
+    WHERE event_id = p_event_id AND student_id = v_student_id AND status = 'waiting';
+
+    IF v_existing_waitlist IS NOT NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'You are already on the waitlist for this event.');
+    END IF;
+
+    -- Calculate confirmed registrations count
     SELECT COUNT(*) INTO v_confirmed_count FROM public.registrations
     WHERE event_id = p_event_id AND status = 'confirmed';
 
+    -- Capacity Check
     IF v_confirmed_count >= v_event.capacity THEN
         RETURN jsonb_build_object('success', false, 'is_full', true, 'message', 'Event is full. Please join the waitlist.');
     END IF;
 
-    -- Determine initial payment status
-    IF v_event.fee = 0 THEN
-        v_payment_status := 'not_required';
+    -- Create Registration
+    IF v_event.fee > 0 THEN
+        -- Free registration placeholder awaiting mock payment confirmation
+        INSERT INTO public.registrations (
+            event_id,
+            student_id,
+            status,
+            payment_status
+        )
+        VALUES (
+            p_event_id,
+            v_student_id,
+            'confirmed',
+            'pending'
+        )
+        RETURNING id INTO v_reg_id;
+
+        RETURN jsonb_build_object(
+            'success', true,
+            'requires_payment', true,
+            'registration_id', v_reg_id,
+            'amount', v_event.fee,
+            'message', 'Registration created. Please complete payment.'
+        );
     ELSE
-        v_payment_status := 'pending';
+        -- Free Event
+        INSERT INTO public.registrations (
+            event_id,
+            student_id,
+            status,
+            payment_status
+        )
+        VALUES (
+            p_event_id,
+            v_student_id,
+            'confirmed',
+            'not_required'
+        )
+        RETURNING id INTO v_reg_id;
+
+        RETURN jsonb_build_object(
+            'success', true,
+            'requires_payment', false,
+            'registration_id', v_reg_id,
+            'message', 'Registration successful!'
+        );
     END IF;
-
-    -- Insert registration
-    INSERT INTO public.registrations (
-        event_id,
-        student_id,
-        status,
-        payment_status,
-        registered_at
-    )
-    VALUES (
-        p_event_id,
-        v_student_id,
-        'confirmed',
-        v_payment_status,
-        NOW()
-    )
-    RETURNING id INTO v_reg_id;
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'registration_id', v_reg_id,
-        'requires_payment', (v_event.fee > 0),
-        'fee', v_event.fee,
-        'message', CASE WHEN v_event.fee > 0 THEN 'Registration initiated. Mock payment required.' ELSE 'Registration successful!' END
-    );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -307,7 +345,7 @@ CREATE OR REPLACE FUNCTION public.complete_mock_payment(
 RETURNS JSONB AS $$
 DECLARE
     v_student_id UUID := auth.uid();
-    v_reg RECORD;
+    v_reg public.registrations%ROWTYPE;
     v_payment_id UUID;
 BEGIN
     IF v_student_id IS NULL THEN
@@ -317,12 +355,11 @@ BEGIN
     SELECT * INTO v_reg FROM public.registrations WHERE id = p_registration_id AND student_id = v_student_id;
 
     IF v_reg IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Registration record not found.');
+        RETURN jsonb_build_object('success', false, 'message', 'Registration not found.');
     END IF;
 
-    -- Create Payment Record
+    -- Record Payment
     INSERT INTO public.payments (
-        registration_id,
         student_id,
         event_id,
         amount,
@@ -331,7 +368,6 @@ BEGIN
         paid_at
     )
     VALUES (
-        p_registration_id,
         v_student_id,
         v_reg.event_id,
         p_amount,
@@ -341,7 +377,7 @@ BEGIN
     )
     RETURNING id INTO v_payment_id;
 
-    -- Update registration payment status
+    -- Update Registration Status
     UPDATE public.registrations
     SET payment_status = 'successful',
         updated_at = NOW()
@@ -350,117 +386,96 @@ BEGIN
     RETURN jsonb_build_object(
         'success', true,
         'payment_id', v_payment_id,
-        'message', 'Payment recorded successfully! Registration confirmed.'
+        'message', 'Payment recorded successfully.'
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
--- 3. RPC: cancel_registration
+-- 3. RPC: cancel_registration (WITH AUTOMATIC FIFO WAITLIST PROMOTION)
 CREATE OR REPLACE FUNCTION public.cancel_registration(p_registration_id UUID)
 RETURNS JSONB AS $$
 DECLARE
     v_student_id UUID := auth.uid();
-    v_reg RECORD;
-    v_event RECORD;
-    v_first_waitlist RECORD;
-    v_promoted_reg_id UUID;
+    v_reg public.registrations%ROWTYPE;
+    v_event public.events%ROWTYPE;
+    v_next_waitlist public.waitlist%ROWTYPE;
+    v_promoted_student_id UUID;
+    v_new_reg_id UUID;
 BEGIN
     IF v_student_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'User not authenticated.');
     END IF;
 
-    SELECT * INTO v_reg FROM public.registrations WHERE id = p_registration_id FOR UPDATE;
+    -- Find registration
+    SELECT * INTO v_reg FROM public.registrations
+    WHERE id = p_registration_id AND (student_id = v_student_id OR public.is_admin());
 
-    IF v_reg IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Registration not found.');
+    IF v_reg IS NULL OR v_reg.status = 'cancelled' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Active registration not found.');
     END IF;
 
-    -- Ownership or Admin check
-    IF v_reg.student_id != v_student_id AND NOT public.is_admin() THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Unauthorized to cancel this registration.');
-    END IF;
+    -- Find event
+    SELECT * INTO v_event FROM public.events WHERE id = v_reg.event_id FOR UPDATE;
 
-    IF v_reg.status = 'cancelled' THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Registration is already cancelled.');
-    END IF;
-
-    SELECT * INTO v_event FROM public.events WHERE id = v_reg.event_id;
-
-    -- Check cancellation deadline
-    IF NOW() > v_event.cancellation_deadline AND NOT public.is_admin() THEN
+    IF NOW() > v_event.cancellation_deadline THEN
         RETURN jsonb_build_object('success', false, 'message', 'Cancellation deadline has passed.');
     END IF;
 
-    -- Cancel registration
+    -- Cancel Registration
     UPDATE public.registrations
     SET status = 'cancelled',
         cancelled_at = NOW(),
         updated_at = NOW()
     WHERE id = p_registration_id;
 
-    -- Check if payment needs to be updated/refunded (if paid)
-    IF v_reg.payment_status = 'successful' THEN
-        UPDATE public.payments
-        SET payment_status = 'refunded',
-            refunded_at = NOW(),
-            updated_at = NOW()
-        WHERE registration_id = p_registration_id;
+    -- AUTOMATIC FIFO WAITLIST PROMOTION
+    -- Find lowest position waiting student (Position 1)
+    SELECT * INTO v_next_waitlist FROM public.waitlist
+    WHERE event_id = v_event.id AND status = 'waiting'
+    ORDER BY position ASC
+    LIMIT 1;
 
-        UPDATE public.registrations
-        SET payment_status = 'refunded'
-        WHERE id = p_registration_id;
-    END IF;
+    IF v_next_waitlist IS NOT NULL THEN
+        v_promoted_student_id := v_next_waitlist.student_id;
 
-    -- SMART WAITLIST AUTO-PROMOTION (FIFO)
-    -- Find earliest waiting student (position 1)
-    SELECT * INTO v_first_waitlist FROM public.waitlist
-    WHERE event_id = v_reg.event_id AND status = 'waiting'
-    ORDER BY position ASC LIMIT 1 FOR UPDATE;
-
-    IF v_first_waitlist IS NOT NULL THEN
-        -- 1. Create active confirmed registration for waitlisted student
+        -- Create confirmed registration for promoted student
         INSERT INTO public.registrations (
             event_id,
             student_id,
             status,
-            payment_status,
-            registered_at
+            payment_status
         )
         VALUES (
-            v_reg.event_id,
-            v_first_waitlist.student_id,
+            v_event.id,
+            v_promoted_student_id,
             'confirmed',
-            'successful',
-            NOW()
+            CASE WHEN v_event.fee > 0 THEN 'successful' ELSE 'not_required' END
         )
-        RETURNING id INTO v_promoted_reg_id;
+        RETURNING id INTO v_new_reg_id;
 
-        -- 2. Update payment link to point to new registration
-        IF v_first_waitlist.payment_id IS NOT NULL THEN
-            UPDATE public.payments
-            SET registration_id = v_promoted_reg_id
-            WHERE id = v_first_waitlist.payment_id;
-        END IF;
-
-        -- 3. Update waitlist entry status
+        -- Update waitlist record to promoted
         UPDATE public.waitlist
-        SET status = 'confirmed',
-            confirmed_at = NOW(),
+        SET status = 'promoted',
             updated_at = NOW()
-        WHERE id = v_first_waitlist.id;
+        WHERE id = v_next_waitlist.id;
 
-        -- 4. Shift remaining waiting positions up by 1
+        -- Shift remaining waiting positions up by 1 (Position 2 -> Position 1, etc.)
         UPDATE public.waitlist
         SET position = position - 1,
             updated_at = NOW()
-        WHERE event_id = v_reg.event_id AND status = 'waiting';
+        WHERE event_id = v_event.id AND status = 'waiting';
+
+        RETURN jsonb_build_object(
+            'success', true,
+            'message', 'Registration cancelled. Seat auto-promoted to waitlisted student.',
+            'promoted_student_id', v_promoted_student_id
+        );
     END IF;
 
     RETURN jsonb_build_object(
         'success', true,
-        'message', 'Registration cancelled successfully.',
-        'auto_promoted', (v_first_waitlist IS NOT NULL)
+        'message', 'Registration cancelled successfully.'
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -475,13 +490,14 @@ CREATE OR REPLACE FUNCTION public.join_event_waitlist(
 RETURNS JSONB AS $$
 DECLARE
     v_student_id UUID := auth.uid();
-    v_event RECORD;
+    v_event public.events%ROWTYPE;
+    v_confirmed_count INTEGER;
     v_active_waitlist_count INTEGER;
-    v_existing_waitlist RECORD;
-    v_existing_reg RECORD;
-    v_next_position INTEGER;
+    v_existing_reg public.registrations%ROWTYPE;
+    v_existing_waitlist public.waitlist%ROWTYPE;
     v_payment_id UUID;
     v_waitlist_id UUID;
+    v_next_position INTEGER;
 BEGIN
     IF v_student_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'message', 'User not authenticated.');
@@ -493,7 +509,15 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Event not found.');
     END IF;
 
-    -- Check if student already has active registration or active waitlist
+    -- Check if confirmed registrations are indeed full
+    SELECT COUNT(*) INTO v_confirmed_count FROM public.registrations
+    WHERE event_id = p_event_id AND status = 'confirmed';
+
+    IF v_confirmed_count < v_event.capacity THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Event still has open seats. Please register directly.');
+    END IF;
+
+    -- Check if student already registered or waitlisted
     SELECT * INTO v_existing_reg FROM public.registrations
     WHERE event_id = p_event_id AND student_id = v_student_id AND status = 'confirmed';
 
@@ -518,24 +542,26 @@ BEGIN
 
     v_next_position := v_active_waitlist_count + 1;
 
-    -- Create Payment Record for Paid Waitlist
-    INSERT INTO public.payments (
-        student_id,
-        event_id,
-        amount,
-        payment_status,
-        transaction_reference,
-        paid_at
-    )
-    VALUES (
-        v_student_id,
-        p_event_id,
-        p_amount,
-        'successful',
-        p_tx_ref,
-        NOW()
-    )
-    RETURNING id INTO v_payment_id;
+    -- Record Payment if fee > 0
+    IF p_amount > 0 THEN
+        INSERT INTO public.payments (
+            student_id,
+            event_id,
+            amount,
+            payment_status,
+            transaction_reference,
+            paid_at
+        )
+        VALUES (
+            v_student_id,
+            p_event_id,
+            p_amount,
+            'successful',
+            p_tx_ref,
+            NOW()
+        )
+        RETURNING id INTO v_payment_id;
+    END IF;
 
     -- Insert Waitlist Record
     INSERT INTO public.waitlist (
@@ -574,9 +600,9 @@ CREATE OR REPLACE FUNCTION public.check_in_student(
 RETURNS JSONB AS $$
 DECLARE
     v_student_id UUID := auth.uid();
-    v_event RECORD;
-    v_reg RECORD;
-    v_existing_att RECORD;
+    v_event public.events%ROWTYPE;
+    v_reg public.registrations%ROWTYPE;
+    v_existing_att public.attendance%ROWTYPE;
     v_att_id UUID;
 BEGIN
     IF v_student_id IS NULL THEN
@@ -591,7 +617,7 @@ BEGIN
 
     -- Token validation
     IF v_event.check_in_token IS NULL OR v_event.check_in_token != p_check_in_token THEN
-        RETURN jsonb_build_object('success', false, 'message', 'Invalid event QR check-in code.');
+        RETURN jsonb_build_object('success', false, 'message', 'Invalid 4-digit check-in PIN.');
     END IF;
 
     -- Check-in window validation
@@ -643,21 +669,20 @@ BEGIN
     RETURN jsonb_build_object(
         'success', true,
         'attendance_id', v_att_id,
-        'message', 'Attendance successfully marked: PRESENT!'
+        'message', 'Attendance marked PRESENT successfully!'
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-
--- ====================================================================
--- SUPABASE STORAGE BUCKET CONFIGURATION FOR EVENT POSTERS
--- ====================================================================
+-- Configure storage bucket
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('event-posters', 'event-posters', true)
 ON CONFLICT (id) DO NOTHING;
 
-CREATE POLICY "Public Read for event posters" ON storage.objects
-    FOR SELECT USING (bucket_id = 'event-posters');
+CREATE POLICY "Poster images are publicly accessible"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'event-posters');
 
-CREATE POLICY "Admin full access for event posters" ON storage.objects
-    FOR ALL USING (bucket_id = 'event-posters' AND public.is_admin());
+CREATE POLICY "Authenticated users can upload poster images"
+    ON storage.objects FOR INSERT
+    WITH CHECK (bucket_id = 'event-posters' AND auth.role() = 'authenticated');

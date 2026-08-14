@@ -15,6 +15,18 @@ export interface RPCResponse {
   already_checked_in?: boolean;
 }
 
+export async function getEventCountsRPC(eventId: string): Promise<{ confirmed_count: number; waitlist_count: number }> {
+  const { data, error } = await supabase.rpc('get_event_counts', {
+    p_event_id: eventId,
+  });
+
+  if (error || !data) {
+    // Fallback if function not deployed yet
+    return { confirmed_count: 0, waitlist_count: 0 };
+  }
+  return data as { confirmed_count: number; waitlist_count: number };
+}
+
 export async function registerForEventRPC(eventId: string): Promise<RPCResponse> {
   const { data, error } = await supabase.rpc('register_for_event', {
     p_event_id: eventId,

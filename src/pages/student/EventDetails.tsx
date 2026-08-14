@@ -3,9 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Event } from '../../types/database.types';
 import { StudentNavbar } from '../../components/layout/StudentNavbar';
-import { formatCurrency, formatDate, formatTime } from '../../lib/utils';
+import { formatCurrency, formatDate, formatTime, generateTransactionReference } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
-import { registerForEventRPC, completeMockPaymentRPC, joinEventWaitlistRPC } from '../../lib/rpc';
+import { registerForEventRPC, completeMockPaymentRPC, joinEventWaitlistRPC, getEventCountsRPC } from '../../lib/rpc';
 import { MockPaymentModal } from '../../components/payment/MockPaymentModal';
 
 export const EventDetails: React.FC = () => {
@@ -18,6 +18,7 @@ export const EventDetails: React.FC = () => {
   const [waitlistCount, setWaitlistCount] = useState<number>(0);
   const [myRegistration, setMyRegistration] = useState<any>(null);
   const [myWaitlist, setMyWaitlist] = useState<any>(null);
+  const [forcedIsFull, setForcedIsFull] = useState<boolean>(false);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -50,27 +51,19 @@ export const EventDetails: React.FC = () => {
         .single();
 
       if (eventErr || !eventData) throw new Error('Event not found.');
-      setEvent(eventData as Event);
+      const ev = eventData as Event;
+      setEvent(ev);
 
-      // 2. Fetch confirmed registration count
-      const { count: regCount } = await supabase
-        .from('registrations')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', id)
-        .eq('status', 'confirmed');
+      // 2. Fetch seat & waitlist counts via RPC (bypasses RLS filtering)
+      const counts = await getEventCountsRPC(id);
+      setConfirmedCount(counts.confirmed_count);
+      setWaitlistCount(counts.waitlist_count);
 
-      setConfirmedCount(regCount || 0);
+      if (counts.confirmed_count >= ev.capacity) {
+        setForcedIsFull(true);
+      }
 
-      // 3. Fetch active waitlist count
-      const { count: waitCount } = await supabase
-        .from('waitlist')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', id)
-        .eq('status', 'waiting');
-
-      setWaitlistCount(waitCount || 0);
-
-      // 4. Fetch student's own registration & waitlist status
+      // 3. Fetch student's own registration & waitlist status
       if (user) {
         const { data: reg } = await supabase
           .from('registrations')
@@ -128,7 +121,14 @@ export const EventDetails: React.FC = () => {
       const res = await registerForEventRPC(event.id);
 
       if (!res.success) {
-        throw new Error(res.message || 'Registration failed.');
+        if (res.is_full || (res.message && res.message.toLowerCase().includes('full'))) {
+          setForcedIsFull(true);
+          setConfirmedCount(event.capacity);
+          setError('Event capacity is full! Click "Join Smart Paid Waitlist" below to join the waitlist queue.');
+        } else {
+          throw new Error(res.message || 'Registration failed.');
+        }
+        return;
       }
 
       if (res.requires_payment && res.registration_id) {
@@ -146,13 +146,32 @@ export const EventDetails: React.FC = () => {
     }
   };
 
-  const handleJoinWaitlistClick = () => {
+  const handleJoinWaitlistClick = async () => {
     if (!user) {
       navigate('/login');
       return;
     }
-    setPaymentMode('waitlist');
-    setPaymentModalOpen(true);
+    if (!event) return;
+
+    if (event.fee > 0) {
+      setPaymentMode('waitlist');
+      setPaymentModalOpen(true);
+    } else {
+      // Free Waitlist
+      setSubmitting(true);
+      setError(null);
+      try {
+        const txRef = generateTransactionReference();
+        const res = await joinEventWaitlistRPC(event.id, 0, txRef);
+        if (!res.success) throw new Error(res.message);
+        setSuccessMessage(`Joined waitlist successfully! Your position is #${res.position}`);
+        await fetchEventDetails();
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setSubmitting(false);
+      }
+    }
   };
 
   const handlePaymentSuccess = async (txRef: string) => {
@@ -209,7 +228,7 @@ export const EventDetails: React.FC = () => {
 
   const isNotOpenYet = now < regOpenAt;
   const isClosed = now > regCloseAt;
-  const isFull = confirmedCount >= event.capacity;
+  const isFull = forcedIsFull || confirmedCount >= event.capacity;
   const isWaitlistFull = waitlistCount >= 4;
   const availableSeats = Math.max(0, event.capacity - confirmedCount);
   const capacityPercent = Math.min(100, Math.round((confirmedCount / event.capacity) * 100));
@@ -263,8 +282,8 @@ export const EventDetails: React.FC = () => {
           <div className="lg:col-span-2 space-y-stack-lg">
             {/* Alerts */}
             {error && (
-              <div className="p-4 bg-error-container text-on-error-container text-body-md rounded-xl flex items-center gap-3">
-                <span className="material-symbols-outlined text-[24px]">error</span>
+              <div className="p-4 bg-amber-50 border border-amber-300 text-amber-900 text-body-md rounded-xl flex items-center gap-3">
+                <span className="material-symbols-outlined text-amber-600 text-[24px]">info</span>
                 <span>{error}</span>
               </div>
             )}
@@ -387,7 +406,7 @@ export const EventDetails: React.FC = () => {
                 </p>
               </div>
 
-              {/* Public Waitlist Status Banner for Everyone */}
+              {/* Public Waitlist Status Banner */}
               <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg text-body-sm">
                 <div className="flex items-center justify-between font-semibold mb-1">
                   <span>Smart Waitlist Queue</span>
@@ -397,7 +416,7 @@ export const EventDetails: React.FC = () => {
                   {isFull
                     ? isWaitlistFull
                       ? 'Waitlist is currently at max capacity (4/4).'
-                      : 'Event is full! Join the paid waitlist for automatic seat promotion.'
+                      : 'Event is full! Join the waitlist for automatic seat promotion when someone cancels.'
                     : 'If event becomes full, a 4-person FIFO waitlist opens automatically.'}
                 </p>
               </div>
@@ -462,10 +481,10 @@ export const EventDetails: React.FC = () => {
                     <button
                       onClick={handleJoinWaitlistClick}
                       disabled={submitting}
-                      className="w-full py-3 bg-amber-600 text-white rounded-lg text-label-md font-label-md font-semibold hover:bg-amber-700 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                      className="w-full py-3 bg-amber-600 text-white rounded-lg text-label-md font-label-md font-semibold hover:bg-amber-700 transition-colors flex items-center justify-center gap-2 shadow-sm animate-pulse"
                     >
                       <span className="material-symbols-outlined text-[20px]">queue</span>
-                      <span>Join Smart Paid Waitlist</span>
+                      <span>{event.fee > 0 ? 'Join Smart Paid Waitlist' : 'Join Smart Waitlist'}</span>
                     </button>
                   )
                 ) : (
