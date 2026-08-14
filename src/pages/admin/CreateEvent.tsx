@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { AdminSidebar } from '../../components/layout/AdminSidebar';
 import { useAuth } from '../../context/AuthContext';
+import { generate4DigitToken } from '../../lib/utils';
 
 export const CreateEvent: React.FC = () => {
   const { user } = useAuth();
@@ -25,6 +26,7 @@ export const CreateEvent: React.FC = () => {
 
   const [checkInStartAt, setCheckInStartAt] = useState('');
   const [checkInEndAt, setCheckInEndAt] = useState('');
+  const [checkInToken, setCheckInToken] = useState(generate4DigitToken());
 
   const [rules, setRules] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
@@ -32,6 +34,10 @@ export const CreateEvent: React.FC = () => {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleRegenerateToken = () => {
+    setCheckInToken(generate4DigitToken());
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +90,7 @@ export const CreateEvent: React.FC = () => {
           cancellation_deadline: defaultCancel,
           check_in_start_at: checkInStartAt ? new Date(checkInStartAt).toISOString() : null,
           check_in_end_at: checkInEndAt ? new Date(checkInEndAt).toISOString() : null,
+          check_in_token: checkInToken || generate4DigitToken(),
           rules,
           status,
           poster_url: posterUrl,
@@ -118,7 +125,7 @@ export const CreateEvent: React.FC = () => {
         <div className="bg-surface rounded-2xl border border-outline-variant p-stack-md md:p-stack-lg shadow-sm max-w-4xl">
           <h1 className="text-headline-lg font-headline-lg text-primary mb-1">Create New College Event</h1>
           <p className="text-body-md text-on-surface-variant mb-stack-lg">
-            Configure event capacity, fees, registration timelines, poster imagery, and QR check-in window.
+            Configure event capacity, fees (₹ INR), registration timelines, poster imagery, and 4-digit check-in PIN.
           </p>
 
           {error && (
@@ -232,7 +239,7 @@ export const CreateEvent: React.FC = () => {
               </div>
             </div>
 
-            {/* Capacity & Fee */}
+            {/* Capacity & Fee in INR */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
               <div>
                 <label className="block text-label-md font-label-md text-on-surface-variant mb-1">
@@ -250,18 +257,18 @@ export const CreateEvent: React.FC = () => {
 
               <div>
                 <label className="block text-label-md font-label-md text-on-surface-variant mb-1">
-                  Registration Fee ($ USD)
+                  Registration Fee (₹ INR)
                 </label>
                 <input
                   type="number"
                   min={0}
-                  step="0.01"
+                  step="1"
                   required
                   value={fee}
                   onChange={(e) => setFee(Number(e.target.value))}
                   className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md"
                 />
-                <p className="text-label-sm text-on-surface-variant mt-1">Set $0 for Free Events</p>
+                <p className="text-label-sm text-on-surface-variant mt-1">Set ₹0 for Free Events</p>
               </div>
 
               <div>
@@ -319,10 +326,34 @@ export const CreateEvent: React.FC = () => {
               </div>
             </div>
 
-            {/* QR Check-in Period */}
+            {/* Check-in QR Window & 4-Digit PIN */}
             <div className="p-stack-md bg-surface-container-low rounded-xl border border-outline-variant space-y-stack-md">
-              <h3 className="text-title-lg font-title-lg text-primary">Check-in QR Window</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+              <div className="flex justify-between items-center">
+                <h3 className="text-title-lg font-title-lg text-primary">Check-in Window & 4-Digit Token PIN</h3>
+                <button
+                  type="button"
+                  onClick={handleRegenerateToken}
+                  className="px-3 py-1 bg-surface border border-outline-variant rounded text-label-sm text-secondary font-semibold hover:bg-surface-container-high"
+                >
+                  Regenerate 4-Digit Token
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+                <div>
+                  <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
+                    4-Digit Check-in PIN / Token
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={4}
+                    value={checkInToken}
+                    onChange={(e) => setCheckInToken(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-mono font-bold text-center text-title-lg text-secondary"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
                     Check-in Window Opens
@@ -334,6 +365,7 @@ export const CreateEvent: React.FC = () => {
                     className="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg text-body-sm"
                   />
                 </div>
+
                 <div>
                   <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
                     Check-in Window Closes
@@ -364,7 +396,7 @@ export const CreateEvent: React.FC = () => {
             {/* Rules */}
             <div>
               <label className="block text-label-md font-label-md text-on-surface-variant mb-1">
-                Event Rules & Instructions
+                Event Rules & Guidelines
               </label>
               <textarea
                 rows={3}

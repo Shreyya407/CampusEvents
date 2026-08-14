@@ -145,15 +145,16 @@ export const AdminEventDetails: React.FC = () => {
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-secondary text-[24px]">qr_code_2</span>
-              <h2 className="text-title-lg font-title-lg text-primary font-semibold">Official Event Check-in QR Code</h2>
+              <h2 className="text-title-lg font-title-lg text-primary font-semibold">Official Event Check-in QR & 4-Digit PIN</h2>
             </div>
             <p className="text-body-md text-on-surface-variant">
-              Display this official QR code at the event venue. Students scan this QR code using their student portal to record attendance.
+              Display this official QR code or 4-digit PIN at the event venue. Students scan this QR code or enter the 4-digit PIN to mark attendance.
             </p>
-            <div className="pt-2">
-              <p className="text-label-sm font-label-sm text-on-surface-variant">
-                Secure Check-in Token: <code className="bg-surface-container-high px-2 py-1 rounded text-primary font-mono select-all">{event.check_in_token}</code>
-              </p>
+            <div className="pt-2 flex items-center gap-3">
+              <span className="text-label-sm font-label-sm text-on-surface-variant">4-Digit Check-in PIN:</span>
+              <code className="bg-secondary text-on-secondary px-4 py-1.5 rounded-lg text-title-lg font-mono font-bold tracking-widest select-all shadow-sm">
+                {event.check_in_token}
+              </code>
             </div>
           </div>
         </div>

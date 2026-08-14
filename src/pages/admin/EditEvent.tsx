@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { AdminSidebar } from '../../components/layout/AdminSidebar';
 import { Event } from '../../types/database.types';
+import { generate4DigitToken } from '../../lib/utils';
 
 export const EditEvent: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +26,7 @@ export const EditEvent: React.FC = () => {
 
   const [checkInStartAt, setCheckInStartAt] = useState('');
   const [checkInEndAt, setCheckInEndAt] = useState('');
+  const [checkInToken, setCheckInToken] = useState('');
 
   const [rules, setRules] = useState('');
   const [status, setStatus] = useState<Event['status']>('published');
@@ -72,6 +74,7 @@ export const EditEvent: React.FC = () => {
 
       setCheckInStartAt(formatIsoForInput(ev.check_in_start_at));
       setCheckInEndAt(formatIsoForInput(ev.check_in_end_at));
+      setCheckInToken(ev.check_in_token || generate4DigitToken());
 
       setRules(ev.rules || '');
       setStatus(ev.status);
@@ -80,6 +83,10 @@ export const EditEvent: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRegenerateToken = () => {
+    setCheckInToken(generate4DigitToken());
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -106,6 +113,7 @@ export const EditEvent: React.FC = () => {
           cancellation_deadline: cancellationDeadline ? new Date(cancellationDeadline).toISOString() : event?.cancellation_deadline,
           check_in_start_at: checkInStartAt ? new Date(checkInStartAt).toISOString() : null,
           check_in_end_at: checkInEndAt ? new Date(checkInEndAt).toISOString() : null,
+          check_in_token: checkInToken || generate4DigitToken(),
           rules,
           status,
           updated_at: new Date().toISOString(),
@@ -141,9 +149,9 @@ export const EditEvent: React.FC = () => {
         </Link>
 
         <div className="bg-surface rounded-2xl border border-outline-variant p-stack-md md:p-stack-lg shadow-sm max-w-4xl">
-          <h1 className="text-headline-lg font-headline-lg text-primary mb-1">Edit Event & Check-in Timelines</h1>
+          <h1 className="text-headline-lg font-headline-lg text-primary mb-1">Edit Event & 4-Digit Check-in PIN</h1>
           <p className="text-body-md text-on-surface-variant mb-stack-lg">
-            Update event information, seat capacity, fees, status, registration deadline, and QR check-in window.
+            Update event details, capacity, fee (₹ INR), status, registration deadline, and 4-digit check-in PIN.
           </p>
 
           {error && (
@@ -267,12 +275,12 @@ export const EditEvent: React.FC = () => {
               </div>
               <div>
                 <label className="block text-label-md font-label-md text-on-surface-variant mb-1">
-                  Fee ($)
+                  Fee (₹ INR)
                 </label>
                 <input
                   type="number"
                   min={0}
-                  step="0.01"
+                  step="1"
                   required
                   value={fee}
                   onChange={(e) => setFee(Number(e.target.value))}
@@ -336,16 +344,35 @@ export const EditEvent: React.FC = () => {
               </div>
             </div>
 
-            {/* Editable QR Check-in Window */}
+            {/* Editable 4-Digit Check-in PIN & Window */}
             <div className="p-stack-md bg-surface-container-low rounded-xl border border-outline-variant space-y-stack-md">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-secondary">edit_calendar</span>
-                <h3 className="text-title-lg font-title-lg text-primary font-semibold">Editable Check-in QR Window</h3>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-secondary">pin</span>
+                  <h3 className="text-title-lg font-title-lg text-primary font-semibold">Editable 4-Digit Check-in PIN & Window</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRegenerateToken}
+                  className="px-3 py-1 bg-surface border border-outline-variant rounded text-label-sm text-secondary font-semibold hover:bg-surface-container-high"
+                >
+                  Regenerate PIN
+                </button>
               </div>
-              <p className="text-body-sm text-on-surface-variant">
-                Configure when students are allowed to scan the venue QR code to mark attendance.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+                <div>
+                  <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
+                    4-Digit Check-in PIN / Token
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={4}
+                    value={checkInToken}
+                    onChange={(e) => setCheckInToken(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-mono font-bold text-center text-title-lg text-secondary"
+                  />
+                </div>
                 <div>
                   <label className="block text-label-sm font-label-sm text-on-surface-variant mb-1">
                     Check-in Window Opens

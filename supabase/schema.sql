@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS public.events (
     created_by UUID REFERENCES public.profiles(id),
     check_in_start_at TIMESTAMPTZ,
     check_in_end_at TIMESTAMPTZ,
-    check_in_token TEXT DEFAULT gen_random_uuid()::text,
+    check_in_token TEXT DEFAULT floor(1000 + random() * 9000)::text,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

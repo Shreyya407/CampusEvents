@@ -211,23 +211,24 @@ export const ScanQR: React.FC = () => {
           />
         </div>
 
-        {/* Manual Token Entry Fallback */}
+        {/* Manual 4-Digit PIN Entry Fallback */}
         <div className="w-full max-w-lg bg-surface rounded-xl border border-outline-variant p-stack-md shadow-sm">
-          <h3 className="text-title-lg font-title-lg text-primary mb-3">3. Or Enter Check-in Token Manually</h3>
+          <h3 className="text-title-lg font-title-lg text-primary mb-3">3. Or Enter 4-Digit Check-in PIN Manually</h3>
           <form onSubmit={handleManualCheckIn} className="flex gap-2">
             <input
               type="text"
+              maxLength={4}
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
-              placeholder="e.g. event-token-uuid-123"
-              className="flex-1 px-4 py-2.5 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md focus:border-secondary focus:ring-1 focus:ring-secondary outline-none"
+              placeholder="e.g. 4829"
+              className="flex-1 px-4 py-2.5 bg-surface-container-lowest border border-outline-variant rounded-lg font-mono text-center text-title-lg font-bold tracking-widest text-primary focus:border-secondary focus:ring-1 focus:ring-secondary outline-none"
             />
             <button
               type="submit"
               disabled={loading}
               className="px-6 py-2.5 bg-secondary text-on-secondary font-label-md font-semibold rounded-lg hover:bg-on-secondary-fixed-variant transition-colors disabled:opacity-50"
             >
-              {loading ? 'Validating...' : 'Submit'}
+              {loading ? 'Validating...' : 'Submit PIN'}
             </button>
           </form>
         </div>

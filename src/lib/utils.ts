@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 export function formatDate(dateString: string): string {
   if (!dateString) return '';
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString('en-IN', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -18,7 +18,6 @@ export function formatDate(dateString: string): string {
 
 export function formatTime(timeString: string): string {
   if (!timeString) return '';
-  // If timeString is HH:MM or HH:MM:SS
   const [hoursStr, minutesStr] = timeString.split(':');
   const hours = parseInt(hoursStr, 10);
   const minutes = parseInt(minutesStr, 10);
@@ -26,7 +25,7 @@ export function formatTime(timeString: string): string {
 
   const date = new Date();
   date.setHours(hours, minutes);
-  return date.toLocaleTimeString('en-US', {
+  return date.toLocaleTimeString('en-IN', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -35,15 +34,19 @@ export function formatTime(timeString: string): string {
 
 export function formatCurrency(amount: number): string {
   if (amount === 0) return 'Free';
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
+    currency: 'INR',
+    maximumFractionDigits: 0,
   }).format(amount);
+}
+
+export function generate4DigitToken(): string {
+  return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
 export function generateTransactionReference(): string {
   const timestamp = Date.now().toString().slice(-6);
-  const randomStr = Math.random().toString(36).substring(2, 7).toUpperCase();
+  const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `TXN-${timestamp}-${randomStr}`;
 }
